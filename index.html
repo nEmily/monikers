@@ -580,10 +580,73 @@ body::after {
   color: var(--text-dim);
   border: 1px solid var(--surface-glow);
 }
+.btn-skip.used {
+  opacity: 0.3;
+  pointer-events: none;
+}
 .btn-got-it {
   background: linear-gradient(170deg, #78c870, #5aaa50);
   color: #1a2a14;
   box-shadow: 0 2px 10px rgba(90, 170, 80, 0.2);
+}
+
+/* ─── Pause Button ─── */
+.btn-pause {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--surface-glow);
+  background: var(--surface-raised);
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  z-index: 10;
+  transition: transform 0.1s;
+}
+.btn-pause:active { transform: scale(0.9); }
+
+/* Pause overlay */
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.pause-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pause-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.pause-timer {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--gold);
+}
+.btn-resume {
+  padding: 0.9rem 2.5rem;
+  font-size: 1.1rem;
+  border-radius: var(--radius-lg);
 }
 
 /* ═══════════════════════════════════════════
@@ -833,9 +896,15 @@ body::after {
     <div class="play-team" id="playTeam">Team 1</div>
   </div>
   <div class="card-container">
+    <button class="btn-pause" id="pauseBtn" aria-label="Pause">&#9646;&#9646;</button>
     <div class="card" id="card">
       <div class="card-word" id="cardWord">Word</div>
       <div class="card-remaining" id="cardRemaining">1 of 10</div>
+    </div>
+    <div class="pause-overlay" id="pauseOverlay">
+      <div class="pause-title">Paused</div>
+      <div class="pause-timer" id="pauseTimer">60</div>
+      <button class="btn btn-gold btn-resume" id="resumeBtn">Resume</button>
     </div>
   </div>
   <div class="play-actions">
@@ -897,6 +966,8 @@ let currentScreen = 'setup';
 let handlingPopState = false;
 let animating = false;
 let turnEnded = false;
+let skipUsed = false;
+let paused = false;
 
 // ─── Screen Router with History API ───
 function showScreen(id) {
@@ -946,8 +1017,12 @@ function resetGame() {
   turnGotWords = [];
   timeLeft = 0;
   animating = false;
+  skipUsed = false;
+  paused = false;
   $('playTimer').classList.remove('urgent');
   $('card').classList.remove('exit-left', 'exit-right', 'enter');
+  $('skipBtn').classList.remove('used');
+  $('pauseOverlay').classList.remove('active');
 }
 
 // ─── Setup ───
@@ -1060,6 +1135,10 @@ function startTurn() {
   timeLeft = turnDuration;
   animating = false;
   turnEnded = false;
+  skipUsed = false;
+  paused = false;
+  $('skipBtn').classList.remove('used');
+  $('pauseOverlay').classList.remove('active');
 
   const r = ROUNDS[currentRound];
   $('playRound').textContent = r.badge;
@@ -1108,7 +1187,7 @@ function animateCard(direction, cb) {
 }
 
 $('gotItBtn').addEventListener('click', () => {
-  if (deck.length === 0 || animating) return;
+  if (deck.length === 0 || animating || paused) return;
   const word = deck.shift();
   turnPoints++;
   turnGotWords.push(word);
@@ -1117,10 +1196,37 @@ $('gotItBtn').addEventListener('click', () => {
 });
 
 $('skipBtn').addEventListener('click', () => {
-  if (deck.length <= 1 || animating) return;
+  if (deck.length <= 1 || animating || skipUsed || paused) return;
+  skipUsed = true;
+  $('skipBtn').classList.add('used');
   const word = deck.shift();
   deck.push(word);
   animateCard('left', showCard);
+});
+
+// ─── Pause / Resume ───
+$('pauseBtn').addEventListener('click', () => {
+  if (paused || turnEnded) return;
+  paused = true;
+  clearTimer();
+  $('pauseTimer').textContent = timeLeft;
+  $('pauseOverlay').classList.add('active');
+});
+
+$('resumeBtn').addEventListener('click', () => {
+  if (!paused) return;
+  paused = false;
+  $('pauseOverlay').classList.remove('active');
+  // Restart the timer from where it left off
+  timer = setInterval(() => {
+    timeLeft--;
+    $('playTimer').textContent = timeLeft;
+    if (timeLeft <= 10) $('playTimer').classList.add('urgent');
+    if (timeLeft <= 0) {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      endTurn();
+    }
+  }, 1000);
 });
 
 function endTurn(roundComplete) {

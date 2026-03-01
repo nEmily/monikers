@@ -1373,6 +1373,7 @@ $('shotDoneBtn').addEventListener('click', () => {
   $('shotOverlay').classList.remove('active');
   doSkip();
   // Resume timer
+  clearTimer();
   timer = setInterval(() => {
     timeLeft--;
     $('playTimer').textContent = timeLeft;
@@ -1386,7 +1387,7 @@ $('shotDoneBtn').addEventListener('click', () => {
 
 // ─── Pause / Resume ───
 $('pauseBtn').addEventListener('click', () => {
-  if (paused || turnEnded) return;
+  if (paused || turnEnded || $('shotOverlay').classList.contains('active')) return;
   paused = true;
   clearTimer();
   $('pauseTimer').textContent = timeLeft;

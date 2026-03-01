@@ -237,6 +237,52 @@ body::after {
 }
 .btn-add:active { transform: scale(0.93); }
 
+/* ─── Bulk Import ─── */
+.import-toggle {
+  font-size: 0.8rem;
+  color: var(--gold-dim);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  padding: 0.2rem 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.import-toggle:active { opacity: 0.7; }
+.import-toggle.open { color: var(--text-faint); }
+.import-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+  animation: chipIn 0.25s ease-out;
+}
+.import-area textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  border: 1px solid var(--surface-glow);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.import-area textarea:focus {
+  border-color: var(--gold-dim);
+  box-shadow: 0 0 0 2px rgba(212, 164, 74, 0.15);
+}
+.import-area textarea::placeholder { color: var(--text-faint); }
+.btn-import {
+  align-self: flex-end;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.85rem;
+  min-height: 40px;
+}
+
 .word-count {
   font-size: 0.8rem;
   color: var(--text-faint);
@@ -580,10 +626,18 @@ body::after {
   color: var(--text-dim);
   border: 1px solid var(--surface-glow);
 }
-.btn-skip.used {
-  opacity: 0.3;
+.btn-skip.penalty {
+  border-color: var(--ember);
+  color: var(--ember-glow);
+}
+.btn-skip .skip-label { pointer-events: none; }
+.btn-skip .skip-cost {
+  display: none;
+  font-size: 0.7rem;
+  opacity: 0.7;
   pointer-events: none;
 }
+.btn-skip.penalty .skip-cost { display: block; }
 .btn-got-it {
   background: linear-gradient(170deg, #78c870, #5aaa50);
   color: #1a2a14;
@@ -647,6 +701,57 @@ body::after {
   padding: 0.9rem 2.5rem;
   font-size: 1.1rem;
   border-radius: var(--radius-lg);
+}
+
+/* Shot penalty overlay */
+.shot-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.shot-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.shot-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+.shot-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--ember-glow);
+}
+.shot-desc {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 0.95rem;
+  max-width: 240px;
+  text-align: center;
+  line-height: 1.5;
+}
+.btn-shot-done {
+  padding: 0.9rem 2.5rem;
+  font-size: 1.1rem;
+  border-radius: var(--radius-lg);
+  margin-top: 0.5rem;
+  background: linear-gradient(170deg, var(--ember-glow), var(--ember));
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: 0 2px 12px rgba(200, 90, 48, 0.25);
 }
 
 /* ═══════════════════════════════════════════
@@ -859,6 +964,12 @@ body::after {
     <button class="btn-add" id="addBtn" aria-label="Add word">+</button>
   </div>
 
+  <div class="import-toggle" id="importToggle">or paste a list</div>
+  <div class="import-area hidden" id="importArea">
+    <textarea id="importText" placeholder="One word per line..." rows="5"></textarea>
+    <button class="btn btn-wood btn-import" id="importBtn">Add All</button>
+  </div>
+
   <div class="word-count" id="wordCount">0 words</div>
 
   <div class="word-list-wrap" id="wordListWrap">
@@ -906,9 +1017,15 @@ body::after {
       <div class="pause-timer" id="pauseTimer">60</div>
       <button class="btn btn-gold btn-resume" id="resumeBtn">Resume</button>
     </div>
+    <div class="shot-overlay" id="shotOverlay">
+      <div class="shot-icon">&#127866;</div>
+      <div class="shot-title">Take a Shot!</div>
+      <div class="shot-desc">Free skip used — someone's gotta drink to skip again</div>
+      <button class="btn btn-shot-done" id="shotDoneBtn">Done, Skip It</button>
+    </div>
   </div>
   <div class="play-actions">
-    <button class="btn btn-skip" id="skipBtn">Skip</button>
+    <button class="btn btn-skip" id="skipBtn"><span class="skip-label">Skip</span><span class="skip-cost">costs a shot</span></button>
     <button class="btn btn-got-it" id="gotItBtn">Got it!</button>
   </div>
 </div>
@@ -1021,8 +1138,9 @@ function resetGame() {
   paused = false;
   $('playTimer').classList.remove('urgent');
   $('card').classList.remove('exit-left', 'exit-right', 'enter');
-  $('skipBtn').classList.remove('used');
+  $('skipBtn').classList.remove('penalty');
   $('pauseOverlay').classList.remove('active');
+  $('shotOverlay').classList.remove('active');
 }
 
 // ─── Setup ───
@@ -1094,6 +1212,38 @@ wordList.addEventListener('click', e => {
   }
 });
 
+// ─── Bulk Import ───
+$('importToggle').addEventListener('click', () => {
+  const area = $('importArea');
+  const toggle = $('importToggle');
+  const open = area.classList.contains('hidden');
+  area.classList.toggle('hidden');
+  toggle.classList.toggle('open', open);
+  toggle.textContent = open ? 'hide list' : 'or paste a list';
+  if (open) $('importText').focus();
+});
+
+$('importBtn').addEventListener('click', () => {
+  const text = $('importText').value;
+  if (!text.trim()) return;
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let added = 0;
+  for (const line of lines) {
+    const word = line.substring(0, 60); // respect maxlength
+    if (!allWords.some(x => x.toLowerCase() === word.toLowerCase())) {
+      allWords.push(word);
+      added++;
+    }
+  }
+  $('importText').value = '';
+  $('importArea').classList.add('hidden');
+  $('importToggle').classList.remove('open');
+  $('importToggle').textContent = 'or paste a list';
+  renderWords();
+  if (added > 0) showHint(`Added ${added} word${added !== 1 ? 's' : ''}`);
+  else showHint('All duplicates — nothing added');
+});
+
 // Timer options
 document.querySelectorAll('.timer-opt').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1137,8 +1287,9 @@ function startTurn() {
   turnEnded = false;
   skipUsed = false;
   paused = false;
-  $('skipBtn').classList.remove('used');
+  $('skipBtn').classList.remove('penalty');
   $('pauseOverlay').classList.remove('active');
+  $('shotOverlay').classList.remove('active');
 
   const r = ROUNDS[currentRound];
   $('playRound').textContent = r.badge;
@@ -1196,12 +1347,41 @@ $('gotItBtn').addEventListener('click', () => {
 });
 
 $('skipBtn').addEventListener('click', () => {
-  if (deck.length <= 1 || animating || skipUsed || paused) return;
-  skipUsed = true;
-  $('skipBtn').classList.add('used');
+  if (deck.length <= 1 || animating || paused) return;
+  if (!skipUsed) {
+    // Free skip
+    skipUsed = true;
+    $('skipBtn').classList.add('penalty');
+    doSkip();
+  } else {
+    // Penalty skip — pause for a shot
+    paused = true;
+    clearTimer();
+    $('shotOverlay').classList.add('active');
+  }
+});
+
+function doSkip() {
   const word = deck.shift();
   deck.push(word);
   animateCard('left', showCard);
+}
+
+$('shotDoneBtn').addEventListener('click', () => {
+  if (!paused) return;
+  paused = false;
+  $('shotOverlay').classList.remove('active');
+  doSkip();
+  // Resume timer
+  timer = setInterval(() => {
+    timeLeft--;
+    $('playTimer').textContent = timeLeft;
+    if (timeLeft <= 10) $('playTimer').classList.add('urgent');
+    if (timeLeft <= 0) {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      endTurn();
+    }
+  }, 1000);
 });
 
 // ─── Pause / Resume ───

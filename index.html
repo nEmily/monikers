@@ -972,14 +972,9 @@ function addWord() {
   renderWords();
 }
 
-function removeWord(w) {
-  allWords = allWords.filter(x => x !== w);
-  renderWords();
-}
-
 function renderWords() {
-  wordList.innerHTML = allWords.map(w =>
-    `<div class="word-chip"><span>${esc(w)}</span><span class="remove" data-w="${esc(w)}">\u00d7</span></div>`
+  wordList.innerHTML = allWords.map((w, i) =>
+    `<div class="word-chip"><span>${esc(w)}</span><span class="remove" data-i="${i}">\u00d7</span></div>`
   ).join('');
   $('wordCount').textContent = `${allWords.length} word${allWords.length !== 1 ? 's' : ''}`;
   if (allWords.length >= 5) {
@@ -1017,7 +1012,11 @@ wordInput.addEventListener('keydown', e => { if (e.key === 'Enter') addWord(); }
 $('addBtn').addEventListener('click', addWord);
 wordList.addEventListener('click', e => {
   const rm = e.target.closest('.remove');
-  if (rm) removeWord(rm.dataset.w);
+  if (rm) {
+    const i = parseInt(rm.dataset.i, 10);
+    allWords.splice(i, 1);
+    renderWords();
+  }
 });
 
 // Timer options

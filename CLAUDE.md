@@ -31,4 +31,4 @@ Setup (add words) → Ready (team + round info) → Play (timer + cards) → Tur
 Just open `index.html` in a browser, or serve with any static server.
 
 ## Kanban Board
-Project card: `C:\Users\emily\projects\board\monikers.md`
+Project card lives in the local board directory (not tracked in this repo).
